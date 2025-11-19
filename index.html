@@ -88,7 +88,6 @@
         .sortable-drag {
             cursor: grabbing;
         }
-        /* 移动端触摸优化 */
         .link-card {
             touch-action: manipulation; 
         }
@@ -219,9 +218,7 @@
             </div>
             
             <form id="add-link-form" onsubmit="handleLinkSubmit(event)">
-                <!-- 隐藏字段：存储编辑时的 ID -->
                 <input type="hidden" id="edit-link-id">
-
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">网站名称</label>
@@ -243,7 +240,6 @@
                         </div>
                     </div>
                 </div>
-                
                 <div class="mt-6 flex justify-end gap-2">
                     <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">取消</button>
                     <button type="submit" class="px-4 py-2 text-xs font-medium bg-primary hover:bg-blue-600 text-white rounded-lg shadow transition-all">保存</button>
@@ -266,22 +262,20 @@
             
             <div class="space-y-4 text-sm">
                 <div class="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs">
-                    <p class="font-bold mb-1"><i class="fa-solid fa-circle-info"></i> 说明：</p>
-                    配置 Firebase 后，数据将实时保存到云端。在其他设备输入相同的配置和“同步ID”，即可实现自动同步。
+                    <p class="font-bold mb-1"><i class="fa-solid fa-circle-info"></i> 直接粘贴：</p>
+                    请直接将 Firebase 控制台中的 <code>const firebaseConfig = { ... };</code> 整段代码粘贴到下方即可。
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">同步 ID (密码)</label>
-                    <input id="sync-id" type="text" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" placeholder="设置一个复杂的唯一ID，例如: my-secret-key-888">
-                    <p class="text-[10px] text-gray-400 mt-1">相当于您的专属房间号，所有设备需保持一致。</p>
+                    <input id="sync-id" type="text" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" placeholder="设置一个复杂的唯一ID，例如: my-nas-001">
                 </div>
 
                 <hr class="border-gray-100">
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">Firebase Config (JSON)</label>
-                    <textarea id="firebase-config-input" rows="5" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:border-primary focus:ring-1 focus:ring-primary" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }'></textarea>
-                    <p class="text-[10px] text-gray-400 mt-1">请粘贴从 Firebase 控制台获取的配置对象。</p>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Firebase Config</label>
+                    <textarea id="firebase-config-input" rows="6" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:border-primary focus:ring-1 focus:ring-primary" placeholder="粘贴 const firebaseConfig = { ... };"></textarea>
                 </div>
 
                 <div class="flex justify-end gap-2 mt-4">
@@ -320,7 +314,6 @@
         import { initializeApp } from "firebase/app";
         import { getFirestore, doc, onSnapshot, setDoc } from "firebase/firestore";
 
-        // 全局变量导出，供普通 script 标签调用
         window.firebaseModules = { initializeApp, getFirestore, doc, onSnapshot, setDoc };
     </script>
 
@@ -345,10 +338,7 @@
             { id: '9', name: 'Stack Overflow', url: 'https://stackoverflow.com', category: 'software' },
         ];
 
-        // --- 状态管理 ---
         let links = JSON.parse(localStorage.getItem('myPortalLinks_v2')) || DEFAULT_LINKS;
-        
-        // Firebase 相关状态
         let db = null;
         let syncUnsubscribe = null;
         const syncModal = document.getElementById('sync-modal');
@@ -360,39 +350,34 @@
             return link;
         });
 
-        // --- DOM 元素 ---
         const mainContainer = document.getElementById('main-container');
         const categorySelectEl = document.getElementById('site-category');
         const modal = document.getElementById('add-modal');
         const modalContent = document.getElementById('modal-content');
         const modalTitle = document.getElementById('modal-title');
-        
-        // 换算相关 DOM
         const converterModal = document.getElementById('converter-modal');
         const converterContent = document.getElementById('converter-content');
         const converterBody = document.getElementById('converter-body');
 
-        // --- 初始化 ---
         function init() {
             renderCategoryOptions();
             renderAllSections();
             startClock();
             switchConverterTab('weight');
-            
-            // 尝试初始化同步
             initSync();
         }
 
-        // --- 同步功能逻辑 ---
         async function initSync() {
             const storedConfig = localStorage.getItem('portal_firebase_config');
             const storedSyncId = localStorage.getItem('portal_sync_id');
 
             if (storedConfig && storedSyncId) {
                 try {
-                    document.getElementById('firebase-config-input').value = storedConfig;
+                    const config = JSON.parse(storedConfig); // 本地存储的是已处理好的 JSON 字符串
+                    // 显示时可以还原成格式化的样子，或者直接不显示，这里简单显示
+                    document.getElementById('firebase-config-input').value = JSON.stringify(config, null, 2); 
                     document.getElementById('sync-id').value = storedSyncId;
-                    await connectToFirebase(JSON.parse(storedConfig), storedSyncId);
+                    await connectToFirebase(config, storedSyncId);
                 } catch (e) {
                     console.error("Sync Init Error", e);
                     updateSyncStatus('offline');
@@ -402,7 +387,7 @@
 
         async function connectToFirebase(config, syncId) {
             if (!window.firebaseModules) {
-                setTimeout(() => connectToFirebase(config, syncId), 500); // 等待模块加载
+                setTimeout(() => connectToFirebase(config, syncId), 500); 
                 return;
             }
 
@@ -411,9 +396,7 @@
                 const { initializeApp, getFirestore, doc, onSnapshot, setDoc } = window.firebaseModules;
                 
                 let app;
-                try {
-                    app = initializeApp(config);
-                } catch (e) {}
+                try { app = initializeApp(config); } catch (e) {}
 
                 db = getFirestore();
                 const docRef = doc(db, "portals", syncId);
@@ -443,13 +426,12 @@
             } catch (e) {
                 console.error("Firebase Connect Error", e);
                 updateSyncStatus('offline');
-                alert("配置有误，无法连接 Firebase");
+                alert("配置有误或网络不通，无法连接 Firebase");
             }
         }
 
         function uploadToCloud() {
             if (!db || !localStorage.getItem('portal_sync_id')) return;
-            
             const syncId = localStorage.getItem('portal_sync_id');
             const { doc, setDoc } = window.firebaseModules;
             
@@ -473,7 +455,6 @@
             else btnText.textContent = '未连接';
         }
 
-        // UI 交互
         function openSyncModal() {
             syncModal.classList.remove('hidden');
             syncModal.classList.add('flex');
@@ -492,9 +473,10 @@
             }, 200);
         }
 
+        // --- 智能配置保存函数 (修复解析问题) ---
         function saveSyncConfig() {
-            const configStr = document.getElementById('firebase-config-input').value;
-            const syncId = document.getElementById('sync-id').value;
+            let configStr = document.getElementById('firebase-config-input').value.trim();
+            const syncId = document.getElementById('sync-id').value.trim();
 
             if (!configStr || !syncId) {
                 alert("请填写完整的配置和同步ID");
@@ -502,13 +484,30 @@
             }
 
             try {
-                const config = JSON.parse(configStr);
-                localStorage.setItem('portal_firebase_config', configStr);
+                // 1. 清洗：移除 'const firebaseConfig =' 和结尾的分号
+                if (configStr.includes('=')) {
+                    configStr = configStr.split('=')[1].trim();
+                }
+                if (configStr.endsWith(';')) {
+                    configStr = configStr.slice(0, -1).trim();
+                }
+
+                // 2. 解析：使用 new Function 来解析非标准 JSON (如 { apiKey: "..." })
+                // 这是一个简单有效的解析 JS 对象字面量的方法
+                const config = new Function('return ' + configStr)();
+                
+                if (!config.apiKey) throw new Error("Missing apiKey");
+
+                // 3. 保存：转为标准 JSON 字符串存储
+                localStorage.setItem('portal_firebase_config', JSON.stringify(config));
                 localStorage.setItem('portal_sync_id', syncId);
+                
                 connectToFirebase(config, syncId);
                 closeSyncModal();
+                alert("配置解析成功并已保存！");
             } catch (e) {
-                alert("Firebase 配置格式错误，必须是有效的 JSON");
+                console.error(e);
+                alert("配置格式无法识别。请确保您复制了完整的 const firebaseConfig = { ... }; 代码段。");
             }
         }
 
@@ -529,21 +528,13 @@
             if (e.target === syncModal) closeSyncModal();
         });
 
-        // --- 渲染所有分类 (支持拖拽) ---
         function renderAllSections() {
             mainContainer.innerHTML = '';
-            
-            // 先对 links 按照 links 数组中的顺序进行排序，确保渲染顺序与数据一致
-            // 但由于我们是按分类渲染的，所以逻辑是：遍历分类，找出属于该分类的 items，按 items 在 links 出现的相对顺序渲染
-            
             CATEGORIES.forEach((cat, index) => {
-                // 提取当前分类的链接，并保持它们在原数组中的相对顺序
                 const catLinks = links.filter(l => l.category === cat.id);
-                
                 const section = document.createElement('section');
                 section.className = 'animate-fade-in mb-2';
                 section.style.animationDelay = `${index * 0.05}s`;
-
                 const headerHtml = `
                     <div class="flex items-center gap-1.5 mb-1.5 px-1 border-b border-gray-200/80 pb-1">
                         <div class="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
@@ -553,10 +544,7 @@
                         <span class="text-[10px] text-gray-400 px-1 bg-gray-50 rounded">${catLinks.length}</span>
                     </div>
                 `;
-
-                // 创建 Grid 容器
                 const gridContainer = document.createElement('div');
-                // 添加 data-category 属性，以便拖拽时知道目标分类
                 gridContainer.dataset.categoryId = cat.id;
                 gridContainer.className = 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 min-h-[64px] transition-all';
                 
@@ -564,8 +552,7 @@
                     catLinks.forEach(link => {
                         const card = document.createElement('div');
                         card.className = 'link-card group relative bg-white hover:bg-white border border-gray-200 hover:border-primary/40 hover:shadow-md rounded-lg p-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer h-16 select-none';
-                        card.dataset.id = link.id; // 关键：存储ID用于排序
-                        
+                        card.dataset.id = link.id;
                         card.innerHTML = `
                             <div class="absolute top-0.5 right-0.5 flex gap-1 opacity-0 action-btn transition-opacity z-10">
                                 <button onclick="openEditModal(event, '${link.id}')" class="w-4 h-4 flex items-center justify-center rounded-full text-gray-300 hover:text-blue-500 hover:bg-blue-50" title="修改">
@@ -582,17 +569,9 @@
                                 <span class="text-gray-600 font-medium text-[10px] text-center truncate w-full px-0.5 mt-1 group-hover:text-primary transition-colors leading-tight">${link.name}</span>
                             </a>
                         `;
-                        
-                        // 防止点击按钮或拖拽时触发链接跳转的额外处理
-                        const linkEl = card.querySelector('a');
-                        linkEl.addEventListener('click', (e) => {
-                            // 如果正在拖拽，阻止跳转 (SortableJS 会处理，但加一层保险)
-                        });
-
                         gridContainer.appendChild(card);
                     });
                 } else {
-                    // 空状态，也要允许拖拽放入
                     gridContainer.classList.add('border', 'border-dashed', 'border-gray-200', 'rounded-lg', 'bg-gray-50/30');
                     gridContainer.innerHTML = `
                         <div class="col-span-full flex items-center justify-center text-gray-400 text-[10px] h-full w-full pointer-events-none">
@@ -600,114 +579,73 @@
                         </div>
                     `;
                 }
-
                 section.innerHTML = headerHtml;
                 section.appendChild(gridContainer);
                 mainContainer.appendChild(section);
-
-                // --- 初始化 SortableJS ---
                 new Sortable(gridContainer, {
-                    group: 'shared', // 允许跨列表拖拽
+                    group: 'shared',
                     animation: 150,
                     ghostClass: 'sortable-ghost',
                     dragClass: 'sortable-drag',
-                    delay: 100, // 稍微延迟防止误触点击 (特别是移动端)
+                    delay: 100,
                     delayOnTouchOnly: true,
-                    onEnd: function (evt) {
-                        handleDragEnd();
-                    }
+                    onEnd: function (evt) { handleDragEnd(); }
                 });
             });
         }
 
-        // --- 拖拽结束处理函数 ---
         function handleDragEnd() {
-            // 逻辑：遍历 DOM 中所有的 gridContainer，按顺序读取 items 的 data-id
-            // 重新构建 links 数组，并更新 item 的 category 属性
-            
             const newLinks = [];
             const allGrids = document.querySelectorAll('[data-category-id]');
-            
             allGrids.forEach(grid => {
                 const catId = grid.dataset.categoryId;
-                const cards = grid.querySelectorAll('.link-card'); // 只获取卡片，忽略空状态提示
-                
+                const cards = grid.querySelectorAll('.link-card');
                 cards.forEach(card => {
                     const id = card.dataset.id;
-                    // 从旧数据中找到该 item 的详细信息
                     const originalItem = links.find(l => l.id === id);
                     if (originalItem) {
-                        // 更新分类（如果移动到了新分类）
                         originalItem.category = catId;
                         newLinks.push(originalItem);
                     }
                 });
             });
-
-            // 更新全局数据并保存
             links = newLinks;
-            saveData(); // 保存并同步
-            
-            // 重新渲染以清理可能残留的 DOM 状态（如空状态提示文字）
-            // 稍微延迟一下让动画更自然
-            // renderAllSections(); // 可选：如果不重新渲染，SortableJS 已经移动了 DOM，但空状态提示可能显示不对
-            // 为了 UI 正确性（例如数量统计），建议重新渲染，但可能会打断动画。
-            // 这里我们只更新数量统计文本即可？ 简单起见，重新渲染最稳妥。
+            saveData();
             setTimeout(renderAllSections, 50);
         }
 
-        // --- 编辑功能 ---
         function openEditModal(e, id) {
-            e.stopPropagation(); // 阻止冒泡
+            e.stopPropagation();
             const link = links.find(l => l.id === id);
             if (!link) return;
-
-            // 填充表单
             document.getElementById('edit-link-id').value = link.id;
             document.getElementById('site-name').value = link.name;
             document.getElementById('site-url').value = link.url;
             document.getElementById('site-category').value = link.category;
-            
-            // 更改标题
             modalTitle.textContent = "修改网站";
-            
-            // 打开弹窗
-            openModal(true); // true 表示是通过编辑打开，不清除表单(实际上我们已经填充了)
+            openModal(true);
         }
 
-        // --- 统一表单提交处理 ---
         function handleLinkSubmit(e) {
             e.preventDefault();
-            
             const editId = document.getElementById('edit-link-id').value;
             const name = document.getElementById('site-name').value;
             let url = document.getElementById('site-url').value;
             const category = document.getElementById('site-category').value;
-
             if (!url.startsWith('http')) url = 'https://' + url;
-
             if (editId) {
-                // --- 更新模式 ---
                 const index = links.findIndex(l => l.id === editId);
                 if (index !== -1) {
                     links[index] = { ...links[index], name, url, category };
                 }
             } else {
-                // --- 新增模式 ---
-                links.push({
-                    id: Date.now().toString(),
-                    name,
-                    url,
-                    category
-                });
+                links.push({ id: Date.now().toString(), name, url, category });
             }
-
-            saveData(); // 保存并同步
+            saveData();
             renderAllSections();
             closeModal();
         }
 
-        // --- 单位换算逻辑 ---
         function switchConverterTab(type) {
             ['weight', 'length', 'temp'].forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
@@ -717,177 +655,81 @@
                     el.className = 'flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors';
                 }
             });
-
             let html = '';
             if (type === 'weight') {
                 html = `
                     <div class="space-y-3 text-xs">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-1a" oninput="calcWeight(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-1b" oninput="calcWeight(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">克 (g)</label><input type="number" id="c-w-2a" oninput="calcWeight(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-2b" oninput="calcWeight(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">斤</label><input type="number" id="c-w-3a" oninput="calcWeight(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-3b" oninput="calcWeight(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                         <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-4a" oninput="calcWeight(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-4b" oninput="calcWeight(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                         <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">吨 (t)</label><input type="number" id="c-w-5a" oninput="calcWeight(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-5b" oninput="calcWeight(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                    </div>
-                `;
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-1a" oninput="calcWeight(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-1b" oninput="calcWeight(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">克 (g)</label><input type="number" id="c-w-2a" oninput="calcWeight(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-2b" oninput="calcWeight(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">斤</label><input type="number" id="c-w-3a" oninput="calcWeight(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-3b" oninput="calcWeight(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-4a" oninput="calcWeight(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-4b" oninput="calcWeight(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">吨 (t)</label><input type="number" id="c-w-5a" oninput="calcWeight(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-5b" oninput="calcWeight(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                    </div>`;
             } else if (type === 'length') {
                 html = `
                     <div class="space-y-3 text-xs">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-1a" oninput="calcLength(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">英里 (mi)</label><input type="number" id="c-l-1b" oninput="calcLength(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-2a" oninput="calcLength(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">英尺 (ft)</label><input type="number" id="c-l-2b" oninput="calcLength(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">厘米 (cm)</label><input type="number" id="c-l-3a" oninput="calcLength(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">英寸 (in)</label><input type="number" id="c-l-3b" oninput="calcLength(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-4a" oninput="calcLength(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">码 (yd)</label><input type="number" id="c-l-4b" oninput="calcLength(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">里</label><input type="number" id="c-l-5a" oninput="calcLength(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-5b" oninput="calcLength(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                    </div>
-                `;
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-1a" oninput="calcLength(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">英里 (mi)</label><input type="number" id="c-l-1b" oninput="calcLength(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-2a" oninput="calcLength(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">英尺 (ft)</label><input type="number" id="c-l-2b" oninput="calcLength(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">厘米 (cm)</label><input type="number" id="c-l-3a" oninput="calcLength(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">英寸 (in)</label><input type="number" id="c-l-3b" oninput="calcLength(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-4a" oninput="calcLength(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">码 (yd)</label><input type="number" id="c-l-4b" oninput="calcLength(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">里</label><input type="number" id="c-l-5a" oninput="calcLength(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-5b" oninput="calcLength(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                    </div>`;
             } else if (type === 'temp') {
                 html = `
                     <div class="space-y-3 text-xs">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-1a" oninput="calcTemp(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-1b" oninput="calcTemp(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-2a" oninput="calcTemp(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-2b" oninput="calcTemp(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-3a" oninput="calcTemp(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-3b" oninput="calcTemp(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-4a" oninput="calcTemp(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">列氏度 (°Re)</label><input type="number" id="c-t-4b" oninput="calcTemp(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-5a" oninput="calcTemp(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                            <div><label class="block text-gray-500 mb-1">兰氏度 (°Ra)</label><input type="number" id="c-t-5b" oninput="calcTemp(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
-                        </div>
-                    </div>
-                `;
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-1a" oninput="calcTemp(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-1b" oninput="calcTemp(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-2a" oninput="calcTemp(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-2b" oninput="calcTemp(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-3a" oninput="calcTemp(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-3b" oninput="calcTemp(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-4a" oninput="calcTemp(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">列氏度 (°Re)</label><input type="number" id="c-t-4b" oninput="calcTemp(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                        <div class="grid grid-cols-2 gap-2"><div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-5a" oninput="calcTemp(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div><div><label class="block text-gray-500 mb-1">兰氏度 (°Ra)</label><input type="number" id="c-t-5b" oninput="calcTemp(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div></div>
+                    </div>`;
             }
             converterBody.innerHTML = html;
         }
 
-        // --- 计算函数 (Helper) ---
-        function setVal(id, val) {
-            document.getElementById(id).value = parseFloat(val).toFixed(2).replace(/\.00$/, '');
-        }
-
+        function setVal(id, val) { document.getElementById(id).value = parseFloat(val).toFixed(2).replace(/\.00$/, ''); }
         function calcWeight(row, side) {
-            const a = document.getElementById(`c-w-${row}a`);
-            const b = document.getElementById(`c-w-${row}b`);
-            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            const a = document.getElementById(`c-w-${row}a`), b = document.getElementById(`c-w-${row}b`), val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
             if (isNaN(val)) return;
-
-            if (row === 1) { // Kg <> Lb
-                side === 'a' ? setVal(`c-w-1b`, val * 2.20462) : setVal(`c-w-1a`, val / 2.20462);
-            } else if (row === 2) { // g <> oz
-                side === 'a' ? setVal(`c-w-2b`, val * 0.035274) : setVal(`c-w-2a`, val / 0.035274);
-            } else if (row === 3) { // 斤 <> Kg (1斤=0.5kg)
-                side === 'a' ? setVal(`c-w-3b`, val * 0.5) : setVal(`c-w-3a`, val / 0.5);
-            } else if (row === 4) { // lb <> oz (1lb=16oz)
-                side === 'a' ? setVal(`c-w-4b`, val * 16) : setVal(`c-w-4a`, val / 16);
-            } else if (row === 5) { // t <> kg
-                side === 'a' ? setVal(`c-w-5b`, val * 1000) : setVal(`c-w-5a`, val / 1000);
-            }
+            if (row === 1) side === 'a' ? setVal(`c-w-1b`, val * 2.20462) : setVal(`c-w-1a`, val / 2.20462);
+            else if (row === 2) side === 'a' ? setVal(`c-w-2b`, val * 0.035274) : setVal(`c-w-2a`, val / 0.035274);
+            else if (row === 3) side === 'a' ? setVal(`c-w-3b`, val * 0.5) : setVal(`c-w-3a`, val / 0.5);
+            else if (row === 4) side === 'a' ? setVal(`c-w-4b`, val * 16) : setVal(`c-w-4a`, val / 16);
+            else if (row === 5) side === 'a' ? setVal(`c-w-5b`, val * 1000) : setVal(`c-w-5a`, val / 1000);
         }
-
         function calcLength(row, side) {
-            const a = document.getElementById(`c-l-${row}a`);
-            const b = document.getElementById(`c-l-${row}b`);
-            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            const a = document.getElementById(`c-l-${row}a`), b = document.getElementById(`c-l-${row}b`), val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
             if (isNaN(val)) return;
-
-            if (row === 1) { // km <> mi
-                side === 'a' ? setVal(`c-l-1b`, val * 0.621371) : setVal(`c-l-1a`, val / 0.621371);
-            } else if (row === 2) { // m <> ft
-                side === 'a' ? setVal(`c-l-2b`, val * 3.28084) : setVal(`c-l-2a`, val / 3.28084);
-            } else if (row === 3) { // cm <> in
-                side === 'a' ? setVal(`c-l-3b`, val * 0.393701) : setVal(`c-l-3a`, val / 0.393701);
-            } else if (row === 4) { // m <> yd
-                side === 'a' ? setVal(`c-l-4b`, val * 1.09361) : setVal(`c-l-4a`, val / 1.09361);
-            } else if (row === 5) { // 里 <> km (1里=0.5km)
-                side === 'a' ? setVal(`c-l-5b`, val * 0.5) : setVal(`c-l-5a`, val / 0.5);
-            }
+            if (row === 1) side === 'a' ? setVal(`c-l-1b`, val * 0.621371) : setVal(`c-l-1a`, val / 0.621371);
+            else if (row === 2) side === 'a' ? setVal(`c-l-2b`, val * 3.28084) : setVal(`c-l-2a`, val / 3.28084);
+            else if (row === 3) side === 'a' ? setVal(`c-l-3b`, val * 0.393701) : setVal(`c-l-3a`, val / 0.393701);
+            else if (row === 4) side === 'a' ? setVal(`c-l-4b`, val * 1.09361) : setVal(`c-l-4a`, val / 1.09361);
+            else if (row === 5) side === 'a' ? setVal(`c-l-5b`, val * 0.5) : setVal(`c-l-5a`, val / 0.5);
         }
-
         function calcTemp(row, side) {
-            const a = document.getElementById(`c-t-${row}a`);
-            const b = document.getElementById(`c-t-${row}b`);
-            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            const a = document.getElementById(`c-t-${row}a`), b = document.getElementById(`c-t-${row}b`), val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
             if (isNaN(val)) return;
-
-            if (row === 1) { // C <> F
-                side === 'a' ? setVal(`c-t-1b`, (val * 9/5) + 32) : setVal(`c-t-1a`, (val - 32) * 5/9);
-            } else if (row === 2) { // C <> K
-                side === 'a' ? setVal(`c-t-2b`, val + 273.15) : setVal(`c-t-2a`, val - 273.15);
-            } else if (row === 3) { // F <> K
-                side === 'a' ? setVal(`c-t-3b`, (val - 32) * 5/9 + 273.15) : setVal(`c-t-3a`, (val - 273.15) * 9/5 + 32);
-            } else if (row === 4) { // C <> Re (Reaumur) C = Re * 1.25
-                 side === 'a' ? setVal(`c-t-4b`, val * 0.8) : setVal(`c-t-4a`, val * 1.25);
-            } else if (row === 5) { // F <> Ra (Rankine) Ra = F + 459.67
-                 side === 'a' ? setVal(`c-t-5b`, val + 459.67) : setVal(`c-t-5a`, val - 459.67);
-            }
+            if (row === 1) side === 'a' ? setVal(`c-t-1b`, (val * 9/5) + 32) : setVal(`c-t-1a`, (val - 32) * 5/9);
+            else if (row === 2) side === 'a' ? setVal(`c-t-2b`, val + 273.15) : setVal(`c-t-2a`, val - 273.15);
+            else if (row === 3) side === 'a' ? setVal(`c-t-3b`, (val - 32) * 5/9 + 273.15) : setVal(`c-t-3a`, (val - 273.15) * 9/5 + 32);
+            else if (row === 4) side === 'a' ? setVal(`c-t-4b`, val * 0.8) : setVal(`c-t-4a`, val * 1.25);
+            else if (row === 5) side === 'a' ? setVal(`c-t-5b`, val + 459.67) : setVal(`c-t-5a`, val - 459.67);
         }
 
         function openConverterModal() {
             converterModal.classList.remove('hidden');
             converterModal.classList.add('flex');
-            setTimeout(() => {
-                converterModal.classList.remove('opacity-0');
-                converterContent.classList.remove('scale-95');
-            }, 10);
+            setTimeout(() => { converterModal.classList.remove('opacity-0'); converterContent.classList.remove('scale-95'); }, 10);
         }
-
         function closeConverterModal() {
             converterModal.classList.add('opacity-0');
             converterContent.classList.add('scale-95');
-            setTimeout(() => {
-                converterModal.classList.remove('flex');
-                converterModal.classList.add('hidden');
-            }, 200);
+            setTimeout(() => { converterModal.classList.remove('flex'); converterModal.classList.add('hidden'); }, 200);
         }
-
-        // --- 现有功能：获取图标 ---
         function getFavicon(url) {
-            try {
-                const domain = new URL(url).hostname;
-                return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-            } catch {
-                return 'https://www.google.com/s2/favicons?domain=google.com&sz=64';
-            }
+            try { const domain = new URL(url).hostname; return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`; } 
+            catch { return 'https://www.google.com/s2/favicons?domain=google.com&sz=64'; }
         }
-
         function renderCategoryOptions() {
             categorySelectEl.innerHTML = '';
             CATEGORIES.forEach(cat => {
@@ -897,73 +739,43 @@
                 categorySelectEl.appendChild(option);
             });
         }
-
-        // 此函数被移除，改用统一的 handleLinkSubmit
-        // function addNewLink(e) { ... }
-
         function deleteLink(e, id) {
             e.stopPropagation();
             if (confirm('删除此快捷方式？')) {
                 links = links.filter(l => l.id !== id);
-                saveData(); // 这里会自动触发上传
+                saveData();
                 renderAllSections();
             }
         }
-
         function saveData(skipCloud = false) {
             localStorage.setItem('myPortalLinks_v2', JSON.stringify(links));
-            if (!skipCloud) {
-                uploadToCloud();
-            }
+            if (!skipCloud) uploadToCloud();
         }
-
         function openModal(isEdit = false) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                modalContent.classList.remove('scale-95');
-            }, 10);
-            
+            setTimeout(() => { modal.classList.remove('opacity-0'); modalContent.classList.remove('scale-95'); }, 10);
             if (!isEdit) {
                 document.getElementById('add-link-form').reset();
-                document.getElementById('edit-link-id').value = ''; // 清空编辑ID
+                document.getElementById('edit-link-id').value = '';
                 modalTitle.textContent = "添加新网站";
             }
-            
             document.getElementById('site-name').focus();
         }
-
-        function openModalWithCategory(catId) {
-            openModal();
-            categorySelectEl.value = catId;
-        }
-
+        function openModalWithCategory(catId) { openModal(); categorySelectEl.value = catId; }
         function closeModal() {
             modal.classList.add('opacity-0');
             modalContent.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.remove('flex');
-                modal.classList.add('hidden');
-            }, 200);
+            setTimeout(() => { modal.classList.remove('flex'); modal.classList.add('hidden'); }, 200);
         }
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
-        });
-        
-        converterModal.addEventListener('click', (e) => {
-            if (e.target === converterModal) closeConverterModal();
-        });
-
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        converterModal.addEventListener('click', (e) => { if (e.target === converterModal) closeConverterModal(); });
         function startClock() {
             const update = () => {
                 const now = new Date();
-                document.getElementById('clock-local').textContent = 
-                    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                document.getElementById('clock-local').textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
                 const cnTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-                document.getElementById('clock-cn').textContent = 
-                    `${String(cnTime.getHours()).padStart(2,'0')}:${String(cnTime.getMinutes()).padStart(2,'0')}`;
+                document.getElementById('clock-cn').textContent = `${String(cnTime.getHours()).padStart(2,'0')}:${String(cnTime.getMinutes()).padStart(2,'0')}`;
             };
             update();
             setInterval(update, 1000);
