@@ -6,6 +6,8 @@
     <title>我的个人门户</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 SortableJS 用于拖拽 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -43,7 +45,7 @@
             box-shadow: 0 4px 20px rgba(66, 133, 244, 0.2);
             transform: scale(1.01);
         }
-        .link-card:hover .delete-btn {
+        .link-card:hover .action-btn {
             opacity: 1;
         }
         .no-scrollbar::-webkit-scrollbar {
@@ -64,9 +66,45 @@
         .custom-scroll::-webkit-scrollbar-track {
             background: transparent;
         }
+        /* 同步状态指示灯 */
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            background-color: #ccc;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.online { background-color: #34A853; box-shadow: 0 0 5px #34A853; }
+        .status-dot.offline { background-color: #ccc; }
+        .status-dot.syncing { background-color: #FBBC05; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        /* 拖拽时的样式 */
+        .sortable-ghost {
+            opacity: 0.4;
+            background-color: #e8f0fe;
+            border: 1px dashed #4285F4;
+        }
+        .sortable-drag {
+            cursor: grabbing;
+        }
+        /* 移动端触摸优化 */
+        .link-card {
+            touch-action: manipulation; 
+        }
     </style>
 </head>
 <body class="text-gray-700 font-sans pb-10">
+
+    <!-- 引入 Firebase SDK (模块化) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+        }
+      }
+    </script>
 
     <!-- TradingView Widget BEGIN (顶部行情条) -->
     <div class="tradingview-widget-container w-full h-10 sticky top-0 z-40 shadow-sm">
@@ -103,6 +141,12 @@
 
     <!-- 右上角工具栏 -->
     <div class="fixed top-14 right-4 z-50 flex gap-2">
+        <!-- 云同步按钮 -->
+        <button onclick="openSyncModal()" class="bg-white/80 backdrop-blur hover:bg-white text-gray-600 hover:text-primary font-medium py-1.5 px-3 rounded-full shadow-sm border border-gray-200 transition-all flex items-center gap-1.5 text-xs">
+            <span id="sync-status-dot" class="status-dot offline"></span>
+            <span>云同步</span>
+        </button>
+
         <!-- 单位换算按钮 -->
         <button onclick="openConverterModal()" class="bg-white/80 backdrop-blur hover:bg-white text-gray-600 hover:text-primary font-medium py-1.5 px-3 rounded-full shadow-sm border border-gray-200 transition-all flex items-center gap-1.5 text-xs">
             <i class="fa-solid fa-calculator"></i> 
@@ -161,20 +205,23 @@
 
     <!-- 页脚 -->
     <div class="text-center mt-6 text-[10px] text-gray-400">
-        数据保存在本地
+        数据保存在本地 | 支持拖拽排序
     </div>
 
-    <!-- 添加链接弹窗 -->
+    <!-- 添加/编辑链接弹窗 -->
     <div id="add-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity opacity-0">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-all duration-200" id="modal-content">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-gray-800">添加新网站</h3>
+                <h3 id="modal-title" class="text-lg font-bold text-gray-800">添加新网站</h3>
                 <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             
-            <form id="add-link-form" onsubmit="addNewLink(event)">
+            <form id="add-link-form" onsubmit="handleLinkSubmit(event)">
+                <!-- 隐藏字段：存储编辑时的 ID -->
+                <input type="hidden" id="edit-link-id">
+
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">网站名称</label>
@@ -205,6 +252,46 @@
         </div>
     </div>
 
+    <!-- 云同步设置弹窗 -->
+    <div id="sync-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity opacity-0">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform scale-95 transition-all duration-200" id="sync-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud text-primary"></i> 云端同步设置
+                </h3>
+                <button onclick="closeSyncModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4 text-sm">
+                <div class="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs">
+                    <p class="font-bold mb-1"><i class="fa-solid fa-circle-info"></i> 说明：</p>
+                    配置 Firebase 后，数据将实时保存到云端。在其他设备输入相同的配置和“同步ID”，即可实现自动同步。
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">同步 ID (密码)</label>
+                    <input id="sync-id" type="text" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" placeholder="设置一个复杂的唯一ID，例如: my-secret-key-888">
+                    <p class="text-[10px] text-gray-400 mt-1">相当于您的专属房间号，所有设备需保持一致。</p>
+                </div>
+
+                <hr class="border-gray-100">
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Firebase Config (JSON)</label>
+                    <textarea id="firebase-config-input" rows="5" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:border-primary focus:ring-1 focus:ring-primary" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }'></textarea>
+                    <p class="text-[10px] text-gray-400 mt-1">请粘贴从 Firebase 控制台获取的配置对象。</p>
+                </div>
+
+                <div class="flex justify-end gap-2 mt-4">
+                    <button onclick="clearSyncConfig()" class="px-4 py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors">清除配置</button>
+                    <button onclick="saveSyncConfig()" class="px-4 py-2 text-xs bg-primary hover:bg-blue-600 text-white rounded-lg shadow transition-all">连接并保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 单位换算弹窗 -->
     <div id="converter-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity opacity-0">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-all duration-200 flex flex-col max-h-[80vh]" id="converter-content">
@@ -229,6 +316,14 @@
         </div>
     </div>
 
+    <script type="module">
+        import { initializeApp } from "firebase/app";
+        import { getFirestore, doc, onSnapshot, setDoc } from "firebase/firestore";
+
+        // 全局变量导出，供普通 script 标签调用
+        window.firebaseModules = { initializeApp, getFirestore, doc, onSnapshot, setDoc };
+    </script>
+
     <script>
         // --- 配置数据 ---
         const CATEGORIES = [
@@ -252,6 +347,13 @@
 
         // --- 状态管理 ---
         let links = JSON.parse(localStorage.getItem('myPortalLinks_v2')) || DEFAULT_LINKS;
+        
+        // Firebase 相关状态
+        let db = null;
+        let syncUnsubscribe = null;
+        const syncModal = document.getElementById('sync-modal');
+        const syncContent = document.getElementById('sync-content');
+        const syncStatusDot = document.getElementById('sync-status-dot');
 
         links = links.map(link => {
             if (!link.category) link.category = 'software';
@@ -263,6 +365,7 @@
         const categorySelectEl = document.getElementById('site-category');
         const modal = document.getElementById('add-modal');
         const modalContent = document.getElementById('modal-content');
+        const modalTitle = document.getElementById('modal-title');
         
         // 换算相关 DOM
         const converterModal = document.getElementById('converter-modal');
@@ -275,16 +378,172 @@
             renderAllSections();
             startClock();
             switchConverterTab('weight');
+            
+            // 尝试初始化同步
+            initSync();
         }
 
-        // --- 渲染所有分类 ---
+        // --- 同步功能逻辑 ---
+        async function initSync() {
+            const storedConfig = localStorage.getItem('portal_firebase_config');
+            const storedSyncId = localStorage.getItem('portal_sync_id');
+
+            if (storedConfig && storedSyncId) {
+                try {
+                    document.getElementById('firebase-config-input').value = storedConfig;
+                    document.getElementById('sync-id').value = storedSyncId;
+                    await connectToFirebase(JSON.parse(storedConfig), storedSyncId);
+                } catch (e) {
+                    console.error("Sync Init Error", e);
+                    updateSyncStatus('offline');
+                }
+            }
+        }
+
+        async function connectToFirebase(config, syncId) {
+            if (!window.firebaseModules) {
+                setTimeout(() => connectToFirebase(config, syncId), 500); // 等待模块加载
+                return;
+            }
+
+            try {
+                updateSyncStatus('syncing');
+                const { initializeApp, getFirestore, doc, onSnapshot, setDoc } = window.firebaseModules;
+                
+                let app;
+                try {
+                    app = initializeApp(config);
+                } catch (e) {}
+
+                db = getFirestore();
+                const docRef = doc(db, "portals", syncId);
+
+                if (syncUnsubscribe) syncUnsubscribe(); 
+                
+                syncUnsubscribe = onSnapshot(docRef, (doc) => {
+                    updateSyncStatus('online');
+                    if (doc.exists()) {
+                        const remoteData = doc.data();
+                        if (remoteData && remoteData.links) {
+                            if (JSON.stringify(remoteData.links) !== JSON.stringify(links)) {
+                                links = remoteData.links;
+                                saveData(true);
+                                renderAllSections();
+                                console.log("已从云端同步数据");
+                            }
+                        }
+                    } else {
+                        uploadToCloud();
+                    }
+                }, (error) => {
+                    console.error("Listen failed: ", error);
+                    updateSyncStatus('offline');
+                });
+                console.log("Firebase 连接成功");
+            } catch (e) {
+                console.error("Firebase Connect Error", e);
+                updateSyncStatus('offline');
+                alert("配置有误，无法连接 Firebase");
+            }
+        }
+
+        function uploadToCloud() {
+            if (!db || !localStorage.getItem('portal_sync_id')) return;
+            
+            const syncId = localStorage.getItem('portal_sync_id');
+            const { doc, setDoc } = window.firebaseModules;
+            
+            updateSyncStatus('syncing');
+            setDoc(doc(db, "portals", syncId), {
+                links: links,
+                updatedAt: new Date().toISOString()
+            }).then(() => {
+                setTimeout(() => updateSyncStatus('online'), 500);
+            }).catch(e => {
+                console.error("Upload failed", e);
+                updateSyncStatus('offline');
+            });
+        }
+
+        function updateSyncStatus(status) {
+            syncStatusDot.className = `status-dot ${status}`;
+            const btnText = syncStatusDot.nextElementSibling;
+            if (status === 'online') btnText.textContent = '已同步';
+            else if (status === 'syncing') btnText.textContent = '同步中...';
+            else btnText.textContent = '未连接';
+        }
+
+        // UI 交互
+        function openSyncModal() {
+            syncModal.classList.remove('hidden');
+            syncModal.classList.add('flex');
+            setTimeout(() => {
+                syncModal.classList.remove('opacity-0');
+                syncContent.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeSyncModal() {
+            syncModal.classList.add('opacity-0');
+            syncContent.classList.add('scale-95');
+            setTimeout(() => {
+                syncModal.classList.remove('flex');
+                syncModal.classList.add('hidden');
+            }, 200);
+        }
+
+        function saveSyncConfig() {
+            const configStr = document.getElementById('firebase-config-input').value;
+            const syncId = document.getElementById('sync-id').value;
+
+            if (!configStr || !syncId) {
+                alert("请填写完整的配置和同步ID");
+                return;
+            }
+
+            try {
+                const config = JSON.parse(configStr);
+                localStorage.setItem('portal_firebase_config', configStr);
+                localStorage.setItem('portal_sync_id', syncId);
+                connectToFirebase(config, syncId);
+                closeSyncModal();
+            } catch (e) {
+                alert("Firebase 配置格式错误，必须是有效的 JSON");
+            }
+        }
+
+        function clearSyncConfig() {
+            if(confirm('确定清除同步配置？将断开连接。')) {
+                localStorage.removeItem('portal_firebase_config');
+                localStorage.removeItem('portal_sync_id');
+                if (syncUnsubscribe) syncUnsubscribe();
+                db = null;
+                updateSyncStatus('offline');
+                document.getElementById('firebase-config-input').value = '';
+                document.getElementById('sync-id').value = '';
+                closeSyncModal();
+            }
+        }
+        
+        syncModal.addEventListener('click', (e) => {
+            if (e.target === syncModal) closeSyncModal();
+        });
+
+        // --- 渲染所有分类 (支持拖拽) ---
         function renderAllSections() {
             mainContainer.innerHTML = '';
+            
+            // 先对 links 按照 links 数组中的顺序进行排序，确保渲染顺序与数据一致
+            // 但由于我们是按分类渲染的，所以逻辑是：遍历分类，找出属于该分类的 items，按 items 在 links 出现的相对顺序渲染
+            
             CATEGORIES.forEach((cat, index) => {
+                // 提取当前分类的链接，并保持它们在原数组中的相对顺序
                 const catLinks = links.filter(l => l.category === cat.id);
+                
                 const section = document.createElement('section');
-                section.className = 'animate-fade-in';
+                section.className = 'animate-fade-in mb-2';
                 section.style.animationDelay = `${index * 0.05}s`;
+
                 const headerHtml = `
                     <div class="flex items-center gap-1.5 mb-1.5 px-1 border-b border-gray-200/80 pb-1">
                         <div class="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
@@ -294,36 +553,158 @@
                         <span class="text-[10px] text-gray-400 px-1 bg-gray-50 rounded">${catLinks.length}</span>
                     </div>
                 `;
-                let gridHtml = '';
+
+                // 创建 Grid 容器
+                const gridContainer = document.createElement('div');
+                // 添加 data-category 属性，以便拖拽时知道目标分类
+                gridContainer.dataset.categoryId = cat.id;
+                gridContainer.className = 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 min-h-[64px] transition-all';
+                
                 if (catLinks.length > 0) {
-                    gridHtml = `<div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">`;
                     catLinks.forEach(link => {
-                        gridHtml += `
-                            <div class="link-card group relative bg-white hover:bg-white border border-gray-200 hover:border-primary/40 hover:shadow-md rounded-lg p-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer h-16">
-                                <button onclick="deleteLink(event, '${link.id}')" class="delete-btn absolute top-0.5 right-0.5 text-gray-300 hover:text-red-500 opacity-0 transition-opacity w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-50 z-10">
+                        const card = document.createElement('div');
+                        card.className = 'link-card group relative bg-white hover:bg-white border border-gray-200 hover:border-primary/40 hover:shadow-md rounded-lg p-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer h-16 select-none';
+                        card.dataset.id = link.id; // 关键：存储ID用于排序
+                        
+                        card.innerHTML = `
+                            <div class="absolute top-0.5 right-0.5 flex gap-1 opacity-0 action-btn transition-opacity z-10">
+                                <button onclick="openEditModal(event, '${link.id}')" class="w-4 h-4 flex items-center justify-center rounded-full text-gray-300 hover:text-blue-500 hover:bg-blue-50" title="修改">
+                                    <i class="fa-solid fa-pen text-[8px]"></i>
+                                </button>
+                                <button onclick="deleteLink(event, '${link.id}')" class="w-4 h-4 flex items-center justify-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50" title="删除">
                                     <i class="fa-solid fa-times text-[10px]"></i>
                                 </button>
-                                <a href="${link.url}" target="_blank" class="flex flex-col items-center w-full text-decoration-none h-full justify-center pt-1">
-                                    <div class="w-6 h-6 bg-gray-50 rounded flex items-center justify-center overflow-hidden shadow-sm p-0.5">
-                                        <img src="${getFavicon(link.url)}" alt="${link.name}" class="w-4 h-4 object-contain" onerror="this.src='https://www.google.com/s2/favicons?domain=google.com'">
-                                    </div>
-                                    <span class="text-gray-600 font-medium text-[10px] text-center truncate w-full px-0.5 mt-1 group-hover:text-primary transition-colors leading-tight">${link.name}</span>
-                                </a>
                             </div>
+                            <a href="${link.url}" target="_blank" class="flex flex-col items-center w-full text-decoration-none h-full justify-center pt-1 pointer-events-none md:pointer-events-auto">
+                                <div class="w-6 h-6 bg-gray-50 rounded flex items-center justify-center overflow-hidden shadow-sm p-0.5">
+                                    <img src="${getFavicon(link.url)}" alt="${link.name}" class="w-4 h-4 object-contain" onerror="this.src='https://www.google.com/s2/favicons?domain=google.com'">
+                                </div>
+                                <span class="text-gray-600 font-medium text-[10px] text-center truncate w-full px-0.5 mt-1 group-hover:text-primary transition-colors leading-tight">${link.name}</span>
+                            </a>
                         `;
+                        
+                        // 防止点击按钮或拖拽时触发链接跳转的额外处理
+                        const linkEl = card.querySelector('a');
+                        linkEl.addEventListener('click', (e) => {
+                            // 如果正在拖拽，阻止跳转 (SortableJS 会处理，但加一层保险)
+                        });
+
+                        gridContainer.appendChild(card);
                     });
-                    gridHtml += `</div>`;
                 } else {
-                    gridHtml = `
-                        <div class="w-full py-2 border border-dashed border-gray-200 rounded-lg flex items-center justify-center gap-2 text-gray-400 bg-gray-50/30 h-12">
-                            <span class="text-[10px]">暂无</span>
-                            <button onclick="openModalWithCategory('${cat.id}')" class="text-primary text-[10px] hover:underline">添加</button>
+                    // 空状态，也要允许拖拽放入
+                    gridContainer.classList.add('border', 'border-dashed', 'border-gray-200', 'rounded-lg', 'bg-gray-50/30');
+                    gridContainer.innerHTML = `
+                        <div class="col-span-full flex items-center justify-center text-gray-400 text-[10px] h-full w-full pointer-events-none">
+                            拖拽至此或&nbsp;<button onclick="openModalWithCategory('${cat.id}')" class="text-primary hover:underline pointer-events-auto">添加</button>
                         </div>
                     `;
                 }
-                section.innerHTML = headerHtml + gridHtml;
+
+                section.innerHTML = headerHtml;
+                section.appendChild(gridContainer);
                 mainContainer.appendChild(section);
+
+                // --- 初始化 SortableJS ---
+                new Sortable(gridContainer, {
+                    group: 'shared', // 允许跨列表拖拽
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    delay: 100, // 稍微延迟防止误触点击 (特别是移动端)
+                    delayOnTouchOnly: true,
+                    onEnd: function (evt) {
+                        handleDragEnd();
+                    }
+                });
             });
+        }
+
+        // --- 拖拽结束处理函数 ---
+        function handleDragEnd() {
+            // 逻辑：遍历 DOM 中所有的 gridContainer，按顺序读取 items 的 data-id
+            // 重新构建 links 数组，并更新 item 的 category 属性
+            
+            const newLinks = [];
+            const allGrids = document.querySelectorAll('[data-category-id]');
+            
+            allGrids.forEach(grid => {
+                const catId = grid.dataset.categoryId;
+                const cards = grid.querySelectorAll('.link-card'); // 只获取卡片，忽略空状态提示
+                
+                cards.forEach(card => {
+                    const id = card.dataset.id;
+                    // 从旧数据中找到该 item 的详细信息
+                    const originalItem = links.find(l => l.id === id);
+                    if (originalItem) {
+                        // 更新分类（如果移动到了新分类）
+                        originalItem.category = catId;
+                        newLinks.push(originalItem);
+                    }
+                });
+            });
+
+            // 更新全局数据并保存
+            links = newLinks;
+            saveData(); // 保存并同步
+            
+            // 重新渲染以清理可能残留的 DOM 状态（如空状态提示文字）
+            // 稍微延迟一下让动画更自然
+            // renderAllSections(); // 可选：如果不重新渲染，SortableJS 已经移动了 DOM，但空状态提示可能显示不对
+            // 为了 UI 正确性（例如数量统计），建议重新渲染，但可能会打断动画。
+            // 这里我们只更新数量统计文本即可？ 简单起见，重新渲染最稳妥。
+            setTimeout(renderAllSections, 50);
+        }
+
+        // --- 编辑功能 ---
+        function openEditModal(e, id) {
+            e.stopPropagation(); // 阻止冒泡
+            const link = links.find(l => l.id === id);
+            if (!link) return;
+
+            // 填充表单
+            document.getElementById('edit-link-id').value = link.id;
+            document.getElementById('site-name').value = link.name;
+            document.getElementById('site-url').value = link.url;
+            document.getElementById('site-category').value = link.category;
+            
+            // 更改标题
+            modalTitle.textContent = "修改网站";
+            
+            // 打开弹窗
+            openModal(true); // true 表示是通过编辑打开，不清除表单(实际上我们已经填充了)
+        }
+
+        // --- 统一表单提交处理 ---
+        function handleLinkSubmit(e) {
+            e.preventDefault();
+            
+            const editId = document.getElementById('edit-link-id').value;
+            const name = document.getElementById('site-name').value;
+            let url = document.getElementById('site-url').value;
+            const category = document.getElementById('site-category').value;
+
+            if (!url.startsWith('http')) url = 'https://' + url;
+
+            if (editId) {
+                // --- 更新模式 ---
+                const index = links.findIndex(l => l.id === editId);
+                if (index !== -1) {
+                    links[index] = { ...links[index], name, url, category };
+                }
+            } else {
+                // --- 新增模式 ---
+                links.push({
+                    id: Date.now().toString(),
+                    name,
+                    url,
+                    category
+                });
+            }
+
+            saveData(); // 保存并同步
+            renderAllSections();
+            closeModal();
         }
 
         // --- 单位换算逻辑 ---
@@ -517,47 +898,39 @@
             });
         }
 
-        function addNewLink(e) {
-            e.preventDefault();
-            const name = document.getElementById('site-name').value;
-            let url = document.getElementById('site-url').value;
-            const category = document.getElementById('site-category').value;
-
-            if (!url.startsWith('http')) url = 'https://' + url;
-
-            links.push({
-                id: Date.now().toString(),
-                name,
-                url,
-                category
-            });
-
-            saveData();
-            renderAllSections();
-            closeModal();
-            document.getElementById('add-link-form').reset();
-        }
+        // 此函数被移除，改用统一的 handleLinkSubmit
+        // function addNewLink(e) { ... }
 
         function deleteLink(e, id) {
             e.stopPropagation();
             if (confirm('删除此快捷方式？')) {
                 links = links.filter(l => l.id !== id);
-                saveData();
+                saveData(); // 这里会自动触发上传
                 renderAllSections();
             }
         }
 
-        function saveData() {
+        function saveData(skipCloud = false) {
             localStorage.setItem('myPortalLinks_v2', JSON.stringify(links));
+            if (!skipCloud) {
+                uploadToCloud();
+            }
         }
 
-        function openModal() {
+        function openModal(isEdit = false) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
                 modalContent.classList.remove('scale-95');
             }, 10);
+            
+            if (!isEdit) {
+                document.getElementById('add-link-form').reset();
+                document.getElementById('edit-link-id').value = ''; // 清空编辑ID
+                modalTitle.textContent = "添加新网站";
+            }
+            
             document.getElementById('site-name').focus();
         }
 
