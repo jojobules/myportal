@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的个人门户</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4285F4',
+                        secondary: '#34A853',
+                        bg: '#f8f9fa',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .search-shadow:focus-within {
+            box-shadow: 0 4px 20px rgba(66, 133, 244, 0.2);
+            transform: scale(1.01);
+        }
+        .link-card:hover .delete-btn {
+            opacity: 1;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 优化弹窗滚动条 */
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    </style>
+</head>
+<body class="text-gray-700 font-sans pb-10">
+
+    <!-- TradingView Widget BEGIN (顶部行情条) -->
+    <div class="tradingview-widget-container w-full h-10 sticky top-0 z-40 shadow-sm">
+        <div class="tradingview-widget-container__widget"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+        {
+        "symbols": [
+            {
+            "proName": "FOREXCOM:SPXUSD",
+            "title": "标普500"
+            },
+            {
+            "proName": "FOREXCOM:NSXUSD",
+            "title": "纳斯达克"
+            },
+            {
+            "proName": "CBOE:VIX",
+            "title": "VIX恐慌指数"
+            },
+            {
+            "description": "美元/加元",
+            "proName": "FX_IDC:USDCAD"
+            }
+        ],
+        "showSymbolLogo": true,
+        "colorTheme": "light",
+        "isTransparent": false,
+        "displayMode": "regular",
+        "locale": "zh_CN"
+        }
+        </script>
+    </div>
+    <!-- TradingView Widget END -->
+
+    <!-- 右上角工具栏 -->
+    <div class="fixed top-14 right-4 z-50 flex gap-2">
+        <!-- 单位换算按钮 -->
+        <button onclick="openConverterModal()" class="bg-white/80 backdrop-blur hover:bg-white text-gray-600 hover:text-primary font-medium py-1.5 px-3 rounded-full shadow-sm border border-gray-200 transition-all flex items-center gap-1.5 text-xs">
+            <i class="fa-solid fa-calculator"></i> 
+            <span>换算</span>
+        </button>
+        
+        <!-- 添加网站按钮 -->
+        <button onclick="openModal()" class="bg-white/80 backdrop-blur hover:bg-white text-primary hover:text-blue-600 font-medium py-1.5 px-3 rounded-full shadow-sm border border-gray-200 transition-all flex items-center gap-1.5 text-xs group">
+            <i class="fa-solid fa-plus transition-transform group-hover:rotate-90"></i> 
+            <span>添加</span>
+        </button>
+    </div>
+
+    <!-- 顶部区域：时钟与搜索 -->
+    <header class="w-full flex flex-col items-center pt-8 pb-4 px-4 mt-4">
+        <!-- 双时钟显示 -->
+        <div class="flex items-center gap-8 mb-5 select-none">
+            <div class="flex flex-col items-center">
+                <div id="clock-local" class="text-3xl font-bold text-gray-700 font-mono leading-none tracking-tight">00:00</div>
+                <div class="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider">本地时间</div>
+            </div>
+            <div class="h-8 w-px bg-gray-300"></div>
+            <div class="flex flex-col items-center">
+                <div id="clock-cn" class="text-3xl font-bold text-gray-700 font-mono leading-none tracking-tight">00:00</div>
+                <div class="text-[10px] text-gray-400 font-medium mt-1 uppercase tracking-wider">北京时间</div>
+            </div>
+        </div>
+
+        <!-- 搜索框 -->
+        <div class="w-full max-w-xl relative z-10">
+            <form action="https://www.google.com/search" method="GET" target="_blank" class="search-shadow rounded-full transition-all duration-300">
+                <div class="glass-panel rounded-full flex items-center p-1.5 shadow-sm">
+                    <div class="pl-3 pr-2 text-gray-400">
+                        <i class="fa-brands fa-google text-lg"></i>
+                    </div>
+                    <input 
+                        type="text" 
+                        name="q" 
+                        placeholder="Google 搜索" 
+                        class="w-full bg-transparent border-none outline-none text-base py-1 text-gray-700 placeholder-gray-400 h-8"
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" class="bg-primary hover:bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors shadow-sm">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </header>
+
+    <!-- 主要内容区：分类列表 -->
+    <main class="w-full max-w-[95%] mx-auto space-y-2" id="main-container">
+        <!-- 内容将由 JS 生成 -->
+    </main>
+
+    <!-- 页脚 -->
+    <div class="text-center mt-6 text-[10px] text-gray-400">
+        数据保存在本地
+    </div>
+
+    <!-- 添加链接弹窗 -->
+    <div id="add-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity opacity-0">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-all duration-200" id="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800">添加新网站</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <form id="add-link-form" onsubmit="addNewLink(event)">
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">网站名称</label>
+                        <input id="site-name" type="text" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="例如: Bilibili" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">网址 (URL)</label>
+                        <input id="site-url" type="url" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="https://..." required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">选择分类</label>
+                        <div class="relative">
+                            <select id="site-category" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                                <!-- 选项由 JS 填充 -->
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                                <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-medium bg-primary hover:bg-blue-600 text-white rounded-lg shadow transition-all">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 单位换算弹窗 -->
+    <div id="converter-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity opacity-0">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-5 transform scale-95 transition-all duration-200 flex flex-col max-h-[80vh]" id="converter-content">
+            <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                <h3 class="text-lg font-bold text-gray-800">单位换算</h3>
+                <button onclick="closeConverterModal()" class="text-gray-400 hover:text-gray-600 w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- 选项卡 -->
+            <div class="flex border-b border-gray-200 mb-4 text-xs flex-shrink-0">
+                <button onclick="switchConverterTab('weight')" id="tab-weight" class="flex-1 pb-2 border-b-2 border-primary font-bold text-primary transition-colors">重量</button>
+                <button onclick="switchConverterTab('length')" id="tab-length" class="flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors">长度</button>
+                <button onclick="switchConverterTab('temp')" id="tab-temp" class="flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors">温度</button>
+            </div>
+
+            <!-- 换算主体，支持滚动 -->
+            <div class="space-y-4 overflow-y-auto custom-scroll pr-1" id="converter-body">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 配置数据 ---
+        const CATEGORIES = [
+            { id: 'fanshawe', name: '范莎学习', icon: 'fa-graduation-cap', color: 'text-blue-600' },
+            { id: 'shopping', name: '购物', icon: 'fa-cart-shopping', color: 'text-orange-500' },
+            { id: 'cn-shopping', name: '中国购', icon: 'fa-bag-shopping', color: 'text-red-500' },
+            { id: 'software', name: '软件', icon: 'fa-code', color: 'text-purple-600' }
+        ];
+
+        const DEFAULT_LINKS = [
+            { id: '1', name: 'FanshaweOnline', url: 'https://www.fanshawec.ca/login', category: 'fanshawe' },
+            { id: '2', name: 'WebAdvisor', url: 'https://webadvisor.fanshawec.ca/', category: 'fanshawe' },
+            { id: '3', name: 'Amazon', url: 'https://www.amazon.ca', category: 'shopping' },
+            { id: '4', name: 'BestBuy', url: 'https://www.bestbuy.ca', category: 'shopping' },
+            { id: '5', name: '淘宝', url: 'https://www.taobao.com', category: 'cn-shopping' },
+            { id: '6', name: '京东', url: 'https://www.jd.com', category: 'cn-shopping' },
+            { id: '7', name: 'ChatGPT', url: 'https://chat.openai.com', category: 'software' },
+            { id: '8', name: 'GitHub', url: 'https://github.com', category: 'software' },
+            { id: '9', name: 'Stack Overflow', url: 'https://stackoverflow.com', category: 'software' },
+        ];
+
+        // --- 状态管理 ---
+        let links = JSON.parse(localStorage.getItem('myPortalLinks_v2')) || DEFAULT_LINKS;
+
+        links = links.map(link => {
+            if (!link.category) link.category = 'software';
+            return link;
+        });
+
+        // --- DOM 元素 ---
+        const mainContainer = document.getElementById('main-container');
+        const categorySelectEl = document.getElementById('site-category');
+        const modal = document.getElementById('add-modal');
+        const modalContent = document.getElementById('modal-content');
+        
+        // 换算相关 DOM
+        const converterModal = document.getElementById('converter-modal');
+        const converterContent = document.getElementById('converter-content');
+        const converterBody = document.getElementById('converter-body');
+
+        // --- 初始化 ---
+        function init() {
+            renderCategoryOptions();
+            renderAllSections();
+            startClock();
+            switchConverterTab('weight');
+        }
+
+        // --- 渲染所有分类 ---
+        function renderAllSections() {
+            mainContainer.innerHTML = '';
+            CATEGORIES.forEach((cat, index) => {
+                const catLinks = links.filter(l => l.category === cat.id);
+                const section = document.createElement('section');
+                section.className = 'animate-fade-in';
+                section.style.animationDelay = `${index * 0.05}s`;
+                const headerHtml = `
+                    <div class="flex items-center gap-1.5 mb-1.5 px-1 border-b border-gray-200/80 pb-1">
+                        <div class="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
+                            <i class="fa-solid ${cat.icon} ${cat.color} text-xs"></i>
+                        </div>
+                        <h2 class="text-xs font-bold text-gray-700">${cat.name}</h2>
+                        <span class="text-[10px] text-gray-400 px-1 bg-gray-50 rounded">${catLinks.length}</span>
+                    </div>
+                `;
+                let gridHtml = '';
+                if (catLinks.length > 0) {
+                    gridHtml = `<div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">`;
+                    catLinks.forEach(link => {
+                        gridHtml += `
+                            <div class="link-card group relative bg-white hover:bg-white border border-gray-200 hover:border-primary/40 hover:shadow-md rounded-lg p-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 cursor-pointer h-16">
+                                <button onclick="deleteLink(event, '${link.id}')" class="delete-btn absolute top-0.5 right-0.5 text-gray-300 hover:text-red-500 opacity-0 transition-opacity w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-50 z-10">
+                                    <i class="fa-solid fa-times text-[10px]"></i>
+                                </button>
+                                <a href="${link.url}" target="_blank" class="flex flex-col items-center w-full text-decoration-none h-full justify-center pt-1">
+                                    <div class="w-6 h-6 bg-gray-50 rounded flex items-center justify-center overflow-hidden shadow-sm p-0.5">
+                                        <img src="${getFavicon(link.url)}" alt="${link.name}" class="w-4 h-4 object-contain" onerror="this.src='https://www.google.com/s2/favicons?domain=google.com'">
+                                    </div>
+                                    <span class="text-gray-600 font-medium text-[10px] text-center truncate w-full px-0.5 mt-1 group-hover:text-primary transition-colors leading-tight">${link.name}</span>
+                                </a>
+                            </div>
+                        `;
+                    });
+                    gridHtml += `</div>`;
+                } else {
+                    gridHtml = `
+                        <div class="w-full py-2 border border-dashed border-gray-200 rounded-lg flex items-center justify-center gap-2 text-gray-400 bg-gray-50/30 h-12">
+                            <span class="text-[10px]">暂无</span>
+                            <button onclick="openModalWithCategory('${cat.id}')" class="text-primary text-[10px] hover:underline">添加</button>
+                        </div>
+                    `;
+                }
+                section.innerHTML = headerHtml + gridHtml;
+                mainContainer.appendChild(section);
+            });
+        }
+
+        // --- 单位换算逻辑 ---
+        function switchConverterTab(type) {
+            ['weight', 'length', 'temp'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (t === type) {
+                    el.className = 'flex-1 pb-2 border-b-2 border-primary font-bold text-primary transition-colors';
+                } else {
+                    el.className = 'flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors';
+                }
+            });
+
+            let html = '';
+            if (type === 'weight') {
+                html = `
+                    <div class="space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-1a" oninput="calcWeight(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-1b" oninput="calcWeight(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">克 (g)</label><input type="number" id="c-w-2a" oninput="calcWeight(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-2b" oninput="calcWeight(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">斤</label><input type="number" id="c-w-3a" oninput="calcWeight(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-3b" oninput="calcWeight(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                         <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">磅 (lb)</label><input type="number" id="c-w-4a" oninput="calcWeight(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">盎司 (oz)</label><input type="number" id="c-w-4b" oninput="calcWeight(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                         <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">吨 (t)</label><input type="number" id="c-w-5a" oninput="calcWeight(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">千克 (kg)</label><input type="number" id="c-w-5b" oninput="calcWeight(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'length') {
+                html = `
+                    <div class="space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-1a" oninput="calcLength(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">英里 (mi)</label><input type="number" id="c-l-1b" oninput="calcLength(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-2a" oninput="calcLength(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">英尺 (ft)</label><input type="number" id="c-l-2b" oninput="calcLength(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">厘米 (cm)</label><input type="number" id="c-l-3a" oninput="calcLength(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">英寸 (in)</label><input type="number" id="c-l-3b" oninput="calcLength(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">米 (m)</label><input type="number" id="c-l-4a" oninput="calcLength(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">码 (yd)</label><input type="number" id="c-l-4b" oninput="calcLength(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">里</label><input type="number" id="c-l-5a" oninput="calcLength(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">千米 (km)</label><input type="number" id="c-l-5b" oninput="calcLength(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'temp') {
+                html = `
+                    <div class="space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-1a" oninput="calcTemp(1, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-1b" oninput="calcTemp(1, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-2a" oninput="calcTemp(2, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-2b" oninput="calcTemp(2, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-3a" oninput="calcTemp(3, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">开尔文 (K)</label><input type="number" id="c-t-3b" oninput="calcTemp(3, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">摄氏度 (°C)</label><input type="number" id="c-t-4a" oninput="calcTemp(4, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">列氏度 (°Re)</label><input type="number" id="c-t-4b" oninput="calcTemp(4, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div><label class="block text-gray-500 mb-1">华氏度 (°F)</label><input type="number" id="c-t-5a" oninput="calcTemp(5, 'a')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                            <div><label class="block text-gray-500 mb-1">兰氏度 (°Ra)</label><input type="number" id="c-t-5b" oninput="calcTemp(5, 'b')" class="w-full border rounded p-1.5" placeholder="0"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            converterBody.innerHTML = html;
+        }
+
+        // --- 计算函数 (Helper) ---
+        function setVal(id, val) {
+            document.getElementById(id).value = parseFloat(val).toFixed(2).replace(/\.00$/, '');
+        }
+
+        function calcWeight(row, side) {
+            const a = document.getElementById(`c-w-${row}a`);
+            const b = document.getElementById(`c-w-${row}b`);
+            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            if (isNaN(val)) return;
+
+            if (row === 1) { // Kg <> Lb
+                side === 'a' ? setVal(`c-w-1b`, val * 2.20462) : setVal(`c-w-1a`, val / 2.20462);
+            } else if (row === 2) { // g <> oz
+                side === 'a' ? setVal(`c-w-2b`, val * 0.035274) : setVal(`c-w-2a`, val / 0.035274);
+            } else if (row === 3) { // 斤 <> Kg (1斤=0.5kg)
+                side === 'a' ? setVal(`c-w-3b`, val * 0.5) : setVal(`c-w-3a`, val / 0.5);
+            } else if (row === 4) { // lb <> oz (1lb=16oz)
+                side === 'a' ? setVal(`c-w-4b`, val * 16) : setVal(`c-w-4a`, val / 16);
+            } else if (row === 5) { // t <> kg
+                side === 'a' ? setVal(`c-w-5b`, val * 1000) : setVal(`c-w-5a`, val / 1000);
+            }
+        }
+
+        function calcLength(row, side) {
+            const a = document.getElementById(`c-l-${row}a`);
+            const b = document.getElementById(`c-l-${row}b`);
+            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            if (isNaN(val)) return;
+
+            if (row === 1) { // km <> mi
+                side === 'a' ? setVal(`c-l-1b`, val * 0.621371) : setVal(`c-l-1a`, val / 0.621371);
+            } else if (row === 2) { // m <> ft
+                side === 'a' ? setVal(`c-l-2b`, val * 3.28084) : setVal(`c-l-2a`, val / 3.28084);
+            } else if (row === 3) { // cm <> in
+                side === 'a' ? setVal(`c-l-3b`, val * 0.393701) : setVal(`c-l-3a`, val / 0.393701);
+            } else if (row === 4) { // m <> yd
+                side === 'a' ? setVal(`c-l-4b`, val * 1.09361) : setVal(`c-l-4a`, val / 1.09361);
+            } else if (row === 5) { // 里 <> km (1里=0.5km)
+                side === 'a' ? setVal(`c-l-5b`, val * 0.5) : setVal(`c-l-5a`, val / 0.5);
+            }
+        }
+
+        function calcTemp(row, side) {
+            const a = document.getElementById(`c-t-${row}a`);
+            const b = document.getElementById(`c-t-${row}b`);
+            const val = side === 'a' ? parseFloat(a.value) : parseFloat(b.value);
+            if (isNaN(val)) return;
+
+            if (row === 1) { // C <> F
+                side === 'a' ? setVal(`c-t-1b`, (val * 9/5) + 32) : setVal(`c-t-1a`, (val - 32) * 5/9);
+            } else if (row === 2) { // C <> K
+                side === 'a' ? setVal(`c-t-2b`, val + 273.15) : setVal(`c-t-2a`, val - 273.15);
+            } else if (row === 3) { // F <> K
+                side === 'a' ? setVal(`c-t-3b`, (val - 32) * 5/9 + 273.15) : setVal(`c-t-3a`, (val - 273.15) * 9/5 + 32);
+            } else if (row === 4) { // C <> Re (Reaumur) C = Re * 1.25
+                 side === 'a' ? setVal(`c-t-4b`, val * 0.8) : setVal(`c-t-4a`, val * 1.25);
+            } else if (row === 5) { // F <> Ra (Rankine) Ra = F + 459.67
+                 side === 'a' ? setVal(`c-t-5b`, val + 459.67) : setVal(`c-t-5a`, val - 459.67);
+            }
+        }
+
+        function openConverterModal() {
+            converterModal.classList.remove('hidden');
+            converterModal.classList.add('flex');
+            setTimeout(() => {
+                converterModal.classList.remove('opacity-0');
+                converterContent.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeConverterModal() {
+            converterModal.classList.add('opacity-0');
+            converterContent.classList.add('scale-95');
+            setTimeout(() => {
+                converterModal.classList.remove('flex');
+                converterModal.classList.add('hidden');
+            }, 200);
+        }
+
+        // --- 现有功能：获取图标 ---
+        function getFavicon(url) {
+            try {
+                const domain = new URL(url).hostname;
+                return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            } catch {
+                return 'https://www.google.com/s2/favicons?domain=google.com&sz=64';
+            }
+        }
+
+        function renderCategoryOptions() {
+            categorySelectEl.innerHTML = '';
+            CATEGORIES.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                categorySelectEl.appendChild(option);
+            });
+        }
+
+        function addNewLink(e) {
+            e.preventDefault();
+            const name = document.getElementById('site-name').value;
+            let url = document.getElementById('site-url').value;
+            const category = document.getElementById('site-category').value;
+
+            if (!url.startsWith('http')) url = 'https://' + url;
+
+            links.push({
+                id: Date.now().toString(),
+                name,
+                url,
+                category
+            });
+
+            saveData();
+            renderAllSections();
+            closeModal();
+            document.getElementById('add-link-form').reset();
+        }
+
+        function deleteLink(e, id) {
+            e.stopPropagation();
+            if (confirm('删除此快捷方式？')) {
+                links = links.filter(l => l.id !== id);
+                saveData();
+                renderAllSections();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('myPortalLinks_v2', JSON.stringify(links));
+        }
+
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            }, 10);
+            document.getElementById('site-name').focus();
+        }
+
+        function openModalWithCategory(catId) {
+            openModal();
+            categorySelectEl.value = catId;
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+        
+        converterModal.addEventListener('click', (e) => {
+            if (e.target === converterModal) closeConverterModal();
+        });
+
+        function startClock() {
+            const update = () => {
+                const now = new Date();
+                document.getElementById('clock-local').textContent = 
+                    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                const cnTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                document.getElementById('clock-cn').textContent = 
+                    `${String(cnTime.getHours()).padStart(2,'0')}:${String(cnTime.getMinutes()).padStart(2,'0')}`;
+            };
+            update();
+            setInterval(update, 1000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
